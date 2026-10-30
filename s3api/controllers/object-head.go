@@ -15,6 +15,7 @@
 package controllers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -149,6 +150,13 @@ func (c S3ApiController) HeadObject(ctx fiber.Ctx) (*Response, error) {
 			headers = map[string]*string{
 				"x-amz-delete-marker": utils.GetStringPtr("true"),
 				"Last-Modified":       utils.GetStringPtr(res.LastModified.UTC().Format(timefmt)),
+			}
+		}
+		var notModified s3err.NotModifiedError
+		if errors.As(err, &notModified) {
+			headers = map[string]*string{
+				"ETag":          &notModified.ETag,
+				"Last-Modified": utils.FormatDatePtrToString(&notModified.LastModified, timefmt),
 			}
 		}
 		return &Response{

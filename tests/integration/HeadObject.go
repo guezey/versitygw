@@ -396,6 +396,18 @@ func HeadObject_conditional_reads(s *S3Conf) error {
 		etag := obj.res.ETag
 		etagTrimmed := strings.Trim(*etag, `"`)
 
+		// the Last-Modified a 304 Not Modified repeats
+		ctx, cancel := context.WithTimeout(context.Background(), shortTimeout)
+		head, err := s3client.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: &bucket,
+			Key:    &key,
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+		lastModified := *head.LastModified
+
 		for i, test := range []struct {
 			ifmatch           *string
 			ifnonematch       *string
@@ -564,6 +576,11 @@ func HeadObject_conditional_reads(s *S3Conf) error {
 			if test.err != nil {
 				if err := checkSdkApiErr(err, *test.err); err != nil {
 					return fmt.Errorf("test case %d failed: %w", i, err)
+				}
+				if test.err == errMod {
+					if err := checkNotModifiedValidators(err, *etag, lastModified); err != nil {
+						return fmt.Errorf("test case %d failed: %w", i, err)
+					}
 				}
 			}
 		}
